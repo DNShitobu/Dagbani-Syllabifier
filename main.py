@@ -2,71 +2,63 @@ from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 import os
 import io
-from syllabifier import process_text
+from syllabifier.processor import process_text
+from syllabifier.utils import handle_uploaded_file, handle_google_sheet
 
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    return render_template('index.html', text="", result=None)
+    result = {}
+    text = ""
+    word_by_word = False
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    # Check if a text input is provided
-    if 'text' in request.form and request.form['text'].strip():
-        text = request.form['text'].strip()
-        word_by_word = 'word_by_word' in request.form
+    if request.method == 'POST':
+        text = request.form.get('text', '').strip()
+        word_by_word = request.form.get('word_by_word') == 'on'
+        file = request.files.get('file')
+        sheet_url = request.form.get('sheet_url')
 
-        result = process_text(text, word_by_word=word_by_word)
-        return render_template('index.html', text=text, result=result)
+        if file:
+            ext = os.path.splitext(file.filename)[1]
+            try:
+                df = handle_uploaded_file(file, ext, column_name="Text", word_by_word=word_by_word)
+                result = {row['Text']: (row['Syllabified'], row['IPA']) for _, row in df.iterrows()}
+            except Exception as e:
+                return jsonify({"error": str(e)}), 400
 
-    # If file upload is used instead
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        elif sheet_url:
+            try:
+                df = handle_google_sheet(sheet_url, 'credentials.json', column_name="Text", word_by_word=word_by_word)
+                result = {row['Text']: (row['Syllabified'], row['IPA']) for _, row in df.iterrows()}
+            except Exception as e:
+                return jsonify({"error": str(e)}), 400
 
-    file = request.files['file']
-    word_by_word = request.form.get('word_by_word') == 'true'
-    filename = file.filename
-    ext = os.path.splitext(filename)[1]
+        elif text:
+            result = process_text(text, word_by_word)
+            if not word_by_word:
+                result = {text: result['sentence']}
 
-    if ext == '.csv':
-        df = pd.read_csv(file)
-    elif ext in ['.xls', '.xlsx']:
-        df = pd.read_excel(file)
-    else:
-        return jsonify({"error": "Unsupported file format"}), 400
+    return render_template('index.html', result=result, text=text)
 
-    results = []
-    for text in df['DagbaniText'].dropna():
-        output = process_text(str(text), word_by_word)
-        if word_by_word:
-            syll = "; ".join(f"{k} = {v[0]}" for k, v in output.items())
-            ipa = "; ".join(f"{k} = {v[1]}" for k, v in output.items())
-        else:
-            syll, ipa = output['sentence']
-        results.append({
-            "original": text,
-            "syllables": syll,
-            "ipa": ipa
-        })
-
-    # Save to CSV in memory
-    df_out = pd.DataFrame(results)
-    buffer = io.StringIO()
-    df_out.to_csv(buffer, index=False)
-    buffer.seek(0)
-
-    return send_file(
-        io.BytesIO(buffer.getvalue().encode()),
-        mimetype='text/csv',
-        as_attachment=True,
-        download_name='syllabified_output.csv'
-    )
 
 @app.route('/download')
-def download_csv():
-    # Fallback route — you can make this more dynamic if needed
-    return "Download handler placeholder."
+def download():
+    # Sample CSV creation for download functionality
+    data = [
+        ['Word', 'Syllabified', 'IPA'],
+        ['sample', 'sam.ple', 'sam.plɛ']
+    ]
+    df = pd.DataFrame(data[1:], columns=data[0])
+    output = io.StringIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+
+    return send_file(io.BytesIO(output.getvalue().encode()),
+                     mimetype='text/csv',
+                     as_attachment=True,
+                     download_name='syllabified_output.csv')
+
 
 if __name__ == "__main__":
     app.run(debug=True)
