@@ -2,7 +2,7 @@
 
 A browser-based tool for breaking Dagbani words into syllables and transcribing them into IPA. This tool supports CSV export, multilingual UI, and integration with Wikifunctions for backend syllabification logic.
 
-## 🌍 Features
+## Features
 
 - Dagbani word syllabification
 - IPA transcription
@@ -10,7 +10,7 @@ A browser-based tool for breaking Dagbani words into syllables and transcribing 
 - Language switcher
 - Wikifunctions API support
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -26,11 +26,11 @@ cd dagbani-syllabifier
 pip install -r requirements.txt
 python main.py
 
-📜 License
+License
 MIT License
 
-🤝 Contributing
+Contributing
 Feel free to fork this repo and submit pull requests.
 
-🌐 Credits
-Made with ❤️ for the Dagbani language community.
+Credits
+Made with love for the Dagbani language community.
